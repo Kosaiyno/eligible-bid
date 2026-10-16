@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "project": "EligibleBid",
+  "track": "Builder -> Intelligent Contracts",
+  "network": {
+    "name": "StudioNet",
+    "chain_id": 61999,
+    "rpc": "https://studio.genlayer.com/api",
+    "explorer": "https://explorer-studio.genlayer.com"
+  },
+  "runner": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6",
+  "contract": {
+    "name": "EligibleBid",
+    "file": "eligible_bid.py",
+    "address": "PENDING_DEPLOYMENT"
+  },
+  "transactions": [
+    {
+      "step": 1,
+      "method": "deploy",
+      "description": "Deploy EligibleBid contract on StudioNet",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "owner": "",
+        "total_auctions": 0,
+        "total_bids": 0
+      }
+    },
+    {
+      "step": 2,
+      "method": "create_auction",
+      "description": "Initialize RFP for Secure Payment Gateway with AES-256 and MIT license requirements floor",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "auction_id": 0,
+        "status": "OPEN",
+        "budget_ceiling_cents": 10000
+      }
+    },
+    {
+      "step": 3,
+      "method": "submit_bid_commitment",
+      "description": "Bidder 1 commits blinded hash for compliant proposal ($80 / 8000 cents)",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "bid_id": 0,
+        "revealed": false
+      }
+    },
+    {
+      "step": 4,
+      "method": "submit_bid_commitment",
+      "description": "Bidder 2 commits blinded hash for cheap adversarial proposal ($20 / 2000 cents)",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "bid_id": 1,
+        "revealed": false
+      }
+    },
+    {
+      "step": 5,
+      "method": "reveal_bid",
+      "description": "Bidder 1 reveals price (8000 cents), salt, and pinned GitHub compliant proposal URL",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "bid_id": 0,
+        "revealed": true,
+        "price_cents": 8000
+      }
+    },
+    {
+      "step": 6,
+      "method": "reveal_bid",
+      "description": "Bidder 2 reveals price (2000 cents), salt, and pinned GitHub adversarial proposal URL",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "bid_id": 1,
+        "revealed": true,
+        "price_cents": 2000
+      }
+    },
+    {
+      "step": 7,
+      "method": "adjudicate_bid_eligibility",
+      "description": "Validators evaluate Bidder 1 proposal against RFP floor with verbatim quote verification",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "expected_outcome": "ELIGIBLE",
+      "read_back": {
+        "bid_id": 0,
+        "eligibility_status": "ELIGIBLE"
+      }
+    },
+    {
+      "step": 8,
+      "method": "adjudicate_bid_eligibility",
+      "description": "Validators evaluate Bidder 2 adversarial proposal containing prompt injection",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "expected_outcome": "INELIGIBLE (Injection blocked)",
+      "expected_failure_label": "ADVERSARIAL_INJECTION_DEFENSE",
+      "read_back": {
+        "bid_id": 1,
+        "eligibility_status": "INELIGIBLE"
+      }
+    },
+    {
+      "step": 9,
+      "method": "settle_auction",
+      "description": "CORE INVARIANT PROOF: Pure deterministic code rejects cheaper $20 bid and awards Bidder 1 at $80",
+      "tx_hash": "",
+      "status": "ACCEPTED",
+      "execution_result": "SUCCESS",
+      "read_back": {
+        "auction_id": 0,
+        "status": "FINALIZED",
+        "winner_bid_id": 0,
+        "winner_price_cents": 8000
+      }
+    }
+  ]
+}
