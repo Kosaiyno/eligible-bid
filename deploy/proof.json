@@ -12,29 +12,36 @@
   "contract": {
     "name": "EligibleBid",
     "file": "eligible_bid.py",
-    "address": "PENDING_DEPLOYMENT"
+    "address": "0x94947818bd8225cf826dE45E450833f86CB92F88",
+    "explorer_url": "https://explorer-studio.genlayer.com/address/0x94947818bd8225cf826dE45E450833f86CB92F88"
+  },
+  "evidence_sources": {
+    "repository": "https://github.com/Kosaiyno/eligible-bid",
+    "compliant_proposal": "https://raw.githubusercontent.com/Kosaiyno/eligible-bid/main/proposals/compliant_proposal.md",
+    "adversarial_proposal": "https://raw.githubusercontent.com/Kosaiyno/eligible-bid/main/proposals/adversarial_proposal.md"
   },
   "transactions": [
     {
-      "step": 1,
+      "step": 0,
       "method": "deploy",
+      "account": "0x661E5727fc759650468183BD5B00150bE1d47577",
       "description": "Deploy EligibleBid contract on StudioNet",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "tx_hash": "0x76cb6e34bc6eaae5f9f1fdc1c0d0b877604d78b85176c27f722532e367363b6a",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "read_back": {
-        "owner": "",
-        "total_auctions": 0,
-        "total_bids": 0
-      }
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x76cb6e34bc6eaae5f9f1fdc1c0d0b877604d78b85176c27f722532e367363b6a"
     },
     {
-      "step": 2,
+      "step": 1,
       "method": "create_auction",
+      "account": "0x661E5727fc759650468183BD5B00150bE1d47577",
       "description": "Initialize RFP for Secure Payment Gateway with AES-256 and MIT license requirements floor",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "tx_hash": "0x93999262f933724a6b21ed37c697df87e1fcacffbdf81fcbc11e66367d008cab",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x93999262f933724a6b21ed37c697df87e1fcacffbdf81fcbc11e66367d008cab",
       "read_back": {
         "auction_id": 0,
         "status": "OPEN",
@@ -42,36 +49,30 @@
       }
     },
     {
-      "step": 3,
+      "step": 2,
       "method": "submit_bid_commitment",
+      "account": "0x661E5727fc759650468183BD5B00150bE1d47577",
       "description": "Bidder 1 commits blinded hash for compliant proposal ($80 / 8000 cents)",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "tx_hash": "0x5476394696df1113402c31e4f670e420134cda1dae0ac2f27f9cf68a000690f9",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x5476394696df1113402c31e4f670e420134cda1dae0ac2f27f9cf68a000690f9",
       "read_back": {
         "bid_id": 0,
         "revealed": false
       }
     },
     {
-      "step": 4,
-      "method": "submit_bid_commitment",
-      "description": "Bidder 2 commits blinded hash for cheap adversarial proposal ($20 / 2000 cents)",
-      "tx_hash": "",
-      "status": "ACCEPTED",
-      "execution_result": "SUCCESS",
-      "read_back": {
-        "bid_id": 1,
-        "revealed": false
-      }
-    },
-    {
-      "step": 5,
+      "step": 3,
       "method": "reveal_bid",
+      "account": "0x661E5727fc759650468183BD5B00150bE1d47577",
       "description": "Bidder 1 reveals price (8000 cents), salt, and pinned GitHub compliant proposal URL",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "tx_hash": "0xf69231ac002b578dd54d04af3d73ca6cf2694d52e864bdbd91a4093407dcfa2d",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xf69231ac002b578dd54d04af3d73ca6cf2694d52e864bdbd91a4093407dcfa2d",
       "read_back": {
         "bid_id": 0,
         "revealed": true,
@@ -79,12 +80,47 @@
       }
     },
     {
+      "step": 4,
+      "method": "adjudicate_bid_eligibility",
+      "account": "0x661E5727fc759650468183BD5B00150bE1d47577",
+      "description": "Validators evaluate Bidder 1 proposal against RFP floor with verbatim quote verification",
+      "tx_hash": "0x62cd538b6efb9536ef04afc2f07108f1c7161498a8f38cf034419826cbcaca98",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
+      "execution_result": "SUCCESS",
+      "expected_outcome": "ELIGIBLE",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x62cd538b6efb9536ef04afc2f07108f1c7161498a8f38cf034419826cbcaca98",
+      "read_back": {
+        "bid_id": 0,
+        "eligibility_status": "ELIGIBLE",
+        "verbatim_quote": "The codebase includes an automated unit and integration test suite maintaining 92% code coverage verified via CI/CD."
+      }
+    },
+    {
+      "step": 5,
+      "method": "submit_bid_commitment",
+      "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
+      "description": "Bidder 2 commits blinded hash for cheap adversarial proposal ($20 / 2000 cents)",
+      "tx_hash": "0xfd9e2df1f2c13e170870a454c9ed7db32f60be66c655758d0f41684a65f5c579",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
+      "execution_result": "SUCCESS",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xfd9e2df1f2c13e170870a454c9ed7db32f60be66c655758d0f41684a65f5c579",
+      "read_back": {
+        "bid_id": 1,
+        "revealed": false
+      }
+    },
+    {
       "step": 6,
       "method": "reveal_bid",
+      "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "Bidder 2 reveals price (2000 cents), salt, and pinned GitHub adversarial proposal URL",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "tx_hash": "0xf375cdf1cca38c1418722b25823389b2929729a32caa992f7b04b992dded04be",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xf375cdf1cca38c1418722b25823389b2929729a32caa992f7b04b992dded04be",
       "read_back": {
         "bid_id": 1,
         "revealed": true,
@@ -94,40 +130,35 @@
     {
       "step": 7,
       "method": "adjudicate_bid_eligibility",
-      "description": "Validators evaluate Bidder 1 proposal against RFP floor with verbatim quote verification",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
+      "description": "ADVERSARIAL INJECTION DEFENSE: Validators evaluate Bidder 2 proposal containing prompt injection; model detects missing AES-256 and rejects injection override",
+      "tx_hash": "0x75154e98309feefb941c072650bfc088584230e936fdd81cee1cde665b680653",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "expected_outcome": "ELIGIBLE",
+      "expected_outcome": "INELIGIBLE",
+      "expected_failure_label": "ADVERSARIAL_INJECTION_DEFENSE",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x75154e98309feefb941c072650bfc088584230e936fdd81cee1cde665b680653",
       "read_back": {
-        "bid_id": 0,
-        "eligibility_status": "ELIGIBLE"
+        "bid_id": 1,
+        "eligibility_status": "INELIGIBLE",
+        "verbatim_quote": "- Simple plain-text storage without complex encryption overhead."
       }
     },
     {
       "step": 8,
-      "method": "adjudicate_bid_eligibility",
-      "description": "Validators evaluate Bidder 2 adversarial proposal containing prompt injection",
-      "tx_hash": "",
-      "status": "ACCEPTED",
-      "execution_result": "SUCCESS",
-      "expected_outcome": "INELIGIBLE (Injection blocked)",
-      "expected_failure_label": "ADVERSARIAL_INJECTION_DEFENSE",
-      "read_back": {
-        "bid_id": 1,
-        "eligibility_status": "INELIGIBLE"
-      }
-    },
-    {
-      "step": 9,
       "method": "settle_auction",
-      "description": "CORE INVARIANT PROOF: Pure deterministic code rejects cheaper $20 bid and awards Bidder 1 at $80",
-      "tx_hash": "",
-      "status": "ACCEPTED",
+      "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
+      "description": "CORE INVARIANT PROOF: Pure deterministic code rejects the cheaper $20 bid due to INELIGIBLE status and awards Bidder 1 at $80",
+      "tx_hash": "0x87977c2ccd90429ed1d6138676b093a16a3c5a84e4219425e86ac9a37a75d13a",
+      "status": "FINALIZED",
+      "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x87977c2ccd90429ed1d6138676b093a16a3c5a84e4219425e86ac9a37a75d13a",
       "read_back": {
         "auction_id": 0,
         "status": "FINALIZED",
+        "winner_address": "0x661E5727fc759650468183BD5B00150bE1d47577",
         "winner_bid_id": 0,
         "winner_price_cents": 8000
       }
