@@ -21,10 +21,10 @@ class Address(str):
         return super().__new__(cls, str(val))
 
 class TreeMap(dict):
-    def __getitem__(self, key):
-        if key not in self:
-            return False
-        return super().__getitem__(key)
+    """
+    Subclass of dict matching GenLayer TreeMap behavior (raises KeyError on missing key).
+    """
+    pass
 
 class MockGL:
     def __init__(self):

@@ -1,10 +1,10 @@
 # EligibleBid — Sealed-Bid Reverse Auction with AI Technical Eligibility Adjudication
 
-[![GenLayer StudioNet](https://img.shields.io/badge/GenLayer-StudioNet%20(61999)-blue)](https://explorer-studio.genlayer.com/address/0x3A812834111e536A690eb25cAc21c7cB8d5cC9A5)
+[![GenLayer StudioNet](https://img.shields.io/badge/GenLayer-StudioNet%20(61999)-blue)](https://explorer-studio.genlayer.com/address/0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 > **Category**: GenLayer Portal — Builder -> Intelligent Contracts  
-> **Deployed Contract Address**: [`0x3A812834111e536A690eb25cAc21c7cB8d5cC9A5`](https://explorer-studio.genlayer.com/address/0x3A812834111e536A690eb25cAc21c7cB8d5cC9A5)  
+> **Deployed Contract Address**: [`0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA`](https://explorer-studio.genlayer.com/address/0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA)  
 > **Proof Manifest**: [`deploy/proof.json`](deploy/proof.json)
 
 ---
@@ -30,16 +30,15 @@ All steps of the full adversarial lifecycle have been executed and finalized on 
 
 | Step | Action | Account | Tx Hash | Consensus | Result |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **0** | `Deploy` | `0x2457...932E` | [`0x10973a...`](https://explorer-studio.genlayer.com/tx/0x10973a66b609504dec4829750cc6f674e7dd038510408a409e76c4db9451f7e9) | `FINALIZED` | Contract deployed at `0x3A81...C9A5` |
-| **1** | `create_auction` | `0x2457...932E` | [`0x646573...`](https://explorer-studio.genlayer.com/tx/0x6465730dc32f42c7e84dd7271c75752ad61a39f801b3e23728915a743278606f) | `FINALIZED` | Auction 0 initialized in `COMMIT` phase |
-| **2** | `submit_bid_commitment` | `0x2457...932E` | [`0x1613f6...`](https://explorer-studio.genlayer.com/tx/0x1613f61e08f2984ddef98eda1245a95518baeee6f85a1c7502a37ad57237e8b9) | `FINALIZED` | Blind hash bound to proposal content SHA-256 committed |
-| **3** | `reveal_bid` (Early Attempt) | `0x2457...932E` | [`0x900019...`](https://explorer-studio.genlayer.com/tx/0x900019f829a081f0c861d8497d42d85221627ea179e9836e280e44dc843ba3fb) | `FINALIZED` | **DEFENSE**: Reverts on-chain during `COMMIT` phase |
-| **4** | `close_commit_phase` | `0x2457...932E` | [`0xa7ba96...`](https://explorer-studio.genlayer.com/tx/0xa7ba969aaf552843501c09c10b5e676fffe5da9a550b7d08b8681b3b4c3053bb) | `FINALIZED` | Creator transitions phase to `REVEAL` |
-| **5** | `reveal_bid` (Authorized) | `0x2457...932E` | [`0xe5796a...`](https://explorer-studio.genlayer.com/tx/0xe5796ad81644854176fa7e3273883fabe0ac6bec89aa283f6c3ad7c4b28774c3) | `FINALIZED` | Preimage verified ($80.00 / 8000 cents + content hash) |
-| **6** | `adjudicate_bid_eligibility` | `0x2457...932E` | [`0x999fb6...`](https://explorer-studio.genlayer.com/tx/0x999fb646fd858ca1e627bf57001c02df427a58a44665f7871755eb39df37073c) | `FINALIZED` | **`ELIGIBLE`** (Verbatim quote and content hash verified) |
-| **7** | `settle_auction` (Early Attempt) | `0x2457...932E` | [`0x619344...`](https://explorer-studio.genlayer.com/tx/0x6193441563df2304942ce4f04a82276e89888771ad25827ea23d8fabf0e09a31) | `FINALIZED` | **DEFENSE**: Reverts on-chain during `REVEAL` phase |
-| **8** | `close_reveal_phase` | `0x2457...932E` | [`0xab3af3...`](https://explorer-studio.genlayer.com/tx/0xab3af3359a121bc214631651634109443af725c512d218935d8ce6302ac4394c) | `FINALIZED` | Creator transitions phase to `SETTLE` |
-| **9** | `settle_auction` (Final Settle) | `0x2457...932E` | [`0x727c08...`](https://explorer-studio.genlayer.com/tx/0x727c08a55cbd11886696da4507e7e3cbdcaa2b807f09cd1e71d00e8d31d63838) | `FINALIZED` | **FINALIZED**: Contract awarded to lowest ELIGIBLE bid ($80) |
+| **0** | `Deploy` | `0x2457...932E` | [`0x2c62e9...`](https://explorer-studio.genlayer.com/tx/0x2c62e97d8e8c1a0bbcac408f78b13d3b19944b1ccae805aefa0a32e244371b73) | `FINALIZED` | Contract deployed at `0x8aC3...53BA` |
+| **1** | `create_auction` | `0x2457...932E` | [`0x6a0ceb...`](https://explorer-studio.genlayer.com/tx/0x6a0cebea8fb8515f029696b6965656089af9b493b32b80450d594a793cf94f36) | `FINALIZED` | Auction 0 initialized in `COMMIT` phase |
+| **2** | `submit_bid_commitment` | `0x2457...932E` | [`0x723f1b...`](https://explorer-studio.genlayer.com/tx/0x723f1b8ded81301ceb608de6ced4430524754e1c9511c97d52961b856d37a398) | `FINALIZED` | Blind hash bound to proposal content SHA-256 committed |
+| **3** | `reveal_bid` (Early Attempt) | `0x2457...932E` | [`0x5e42ec...`](https://explorer-studio.genlayer.com/tx/0x5e42ecfb46086898c30364d54f33233568fbdbc21300582d146bf54db18ac892) | `FINALIZED` | **DEFENSE**: Reverts on-chain during `COMMIT` phase |
+| **4** | `close_commit_phase` | `0x2457...932E` | [`0x787065...`](https://explorer-studio.genlayer.com/tx/0x78706534adb2fe1ed2902b8e8092d945376448840555246549e7116cfd7deecc) | `FINALIZED` | Creator transitions phase to `REVEAL` |
+| **5** | `reveal_bid` (Authorized) | `0x2457...932E` | [`0xd43d84...`](https://explorer-studio.genlayer.com/tx/0xd43d849a2f69d9667d3ebd41323ca40f22683383d1b3017f0d055ccbe9467b00) | `FINALIZED` | Preimage verified ($80.00 / 8000 cents + content hash) |
+| **6** | `adjudicate_bid_eligibility` | `0x2457...932E` | [`0xc60196...`](https://explorer-studio.genlayer.com/tx/0xc60196c3fec6b0f806622d3949ebf266dcd00bdf405bb83c2b04d4f39508b1ac) | `FINALIZED` | **`ELIGIBLE`** (Verbatim quote and content hash verified) |
+| **7** | `close_reveal_phase` | `0x2457...932E` | [`0xf39f10...`](https://explorer-studio.genlayer.com/tx/0xf39f10113f116d379ecc307dfb0dfff367545badb05e346ebffb7007aef43ef0) | `FINALIZED` | Creator transitions phase to `SETTLE` |
+| **8** | `settle_auction` (Final Settle) | `0x2457...932E` | [`0x43cbce...`](https://explorer-studio.genlayer.com/tx/0x43cbcebbc0f9259942f01fe10dc059369c9fa0b9d30dbd4052eb9eeabd1e75fb) | `FINALIZED` | **FINALIZED**: Contract awarded to lowest ELIGIBLE bid ($80) |
 
 ---
 

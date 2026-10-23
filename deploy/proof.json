@@ -12,8 +12,8 @@
   "contract": {
     "name": "EligibleBid",
     "file": "eligible_bid.py",
-    "address": "0x3A812834111e536A690eb25cAc21c7cB8d5cC9A5",
-    "explorer_url": "https://explorer-studio.genlayer.com/address/0x3A812834111e536A690eb25cAc21c7cB8d5cC9A5"
+    "address": "0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA",
+    "explorer_url": "https://explorer-studio.genlayer.com/address/0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA"
   },
   "evidence_sources": {
     "repository": "https://github.com/Kosaiyno/eligible-bid",
@@ -25,112 +25,101 @@
       "step": 0,
       "method": "deploy",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
-      "description": "Deploy EligibleBid contract on StudioNet with phase state machine and content hash binding",
-      "tx_hash": "0x10973a66b609504dec4829750cc6f674e7dd038510408a409e76c4db9451f7e9",
+      "description": "Deploy EligibleBid contract on StudioNet with phase state machine, anti-replay TreeMap, and content hash binding",
+      "tx_hash": "0x2c62e97d8e8c1a0bbcac408f78b13d3b19944b1ccae805aefa0a32e244371b73",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x10973a66b609504dec4829750cc6f674e7dd038510408a409e76c4db9451f7e9"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x2c62e97d8e8c1a0bbcac408f78b13d3b19944b1ccae805aefa0a32e244371b73"
     },
     {
       "step": 1,
       "method": "create_auction",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "Initialize RFP for Enterprise Payment Gateway in COMMIT phase with AES-256 and MIT license requirements floor",
-      "tx_hash": "0x6465730dc32f42c7e84dd7271c75752ad61a39f801b3e23728915a743278606f",
+      "tx_hash": "0x6a0cebea8fb8515f029696b6965656089af9b493b32b80450d594a793cf94f36",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x6465730dc32f42c7e84dd7271c75752ad61a39f801b3e23728915a743278606f"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x6a0cebea8fb8515f029696b6965656089af9b493b32b80450d594a793cf94f36"
     },
     {
       "step": 2,
       "method": "submit_bid_commitment",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "Bidder commits blinded hash bound to proposal document SHA-256 content hash",
-      "tx_hash": "0x1613f61e08f2984ddef98eda1245a95518baeee6f85a1c7502a37ad57237e8b9",
+      "tx_hash": "0x723f1b8ded81301ceb608de6ced4430524754e1c9511c97d52961b856d37a398",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x1613f61e08f2984ddef98eda1245a95518baeee6f85a1c7502a37ad57237e8b9"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x723f1b8ded81301ceb608de6ced4430524754e1c9511c97d52961b856d37a398"
     },
     {
       "step": 3,
       "method": "reveal_bid",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "PHASE BOUNDARY DEFENSE: Early reveal attempted during COMMIT phase reverts on-chain",
-      "tx_hash": "0x900019f829a081f0c861d8497d42d85221627ea179e9836e280e44dc843ba3fb",
+      "tx_hash": "0x5e42ecfb46086898c30364d54f33233568fbdbc21300582d146bf54db18ac892",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "EXPECTED_REVERT_DEFENSE",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x900019f829a081f0c861d8497d42d85221627ea179e9836e280e44dc843ba3fb"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x5e42ecfb46086898c30364d54f33233568fbdbc21300582d146bf54db18ac892"
     },
     {
       "step": 4,
       "method": "close_commit_phase",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "Auction creator advances auction phase from COMMIT to REVEAL",
-      "tx_hash": "0xa7ba969aaf552843501c09c10b5e676fffe5da9a550b7d08b8681b3b4c3053bb",
+      "tx_hash": "0x78706534adb2fe1ed2902b8e8092d945376448840555246549e7116cfd7deecc",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xa7ba969aaf552843501c09c10b5e676fffe5da9a550b7d08b8681b3b4c3053bb"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x78706534adb2fe1ed2902b8e8092d945376448840555246549e7116cfd7deecc"
     },
     {
       "step": 5,
       "method": "reveal_bid",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "Bidder reveals price (8000 cents), salt, proposal content hash, and pinned GitHub proposal URL",
-      "tx_hash": "0xe5796ad81644854176fa7e3273883fabe0ac6bec89aa283f6c3ad7c4b28774c3",
+      "tx_hash": "0xd43d849a2f69d9667d3ebd41323ca40f22683383d1b3017f0d055ccbe9467b00",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xe5796ad81644854176fa7e3273883fabe0ac6bec89aa283f6c3ad7c4b28774c3"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xd43d849a2f69d9667d3ebd41323ca40f22683383d1b3017f0d055ccbe9467b00"
     },
     {
       "step": 6,
       "method": "adjudicate_bid_eligibility",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
-      "description": "Validators evaluate technical proposal under Equivalence Principle and verify content hash binding",
-      "tx_hash": "0x999fb646fd858ca1e627bf57001c02df427a58a44665f7871755eb39df37073c",
+      "description": "Validators evaluate technical proposal under Equivalence Principle, fetch proposal via web, verify content hash binding, and set ELIGIBLE with verbatim quote",
+      "tx_hash": "0xc60196c3fec6b0f806622d3949ebf266dcd00bdf405bb83c2b04d4f39508b1ac",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
       "expected_outcome": "ELIGIBLE",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x999fb646fd858ca1e627bf57001c02df427a58a44665f7871755eb39df37073c"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xc60196c3fec6b0f806622d3949ebf266dcd00bdf405bb83c2b04d4f39508b1ac"
     },
     {
       "step": 7,
-      "method": "settle_auction",
-      "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
-      "description": "PHASE BOUNDARY DEFENSE: Early settlement attempted during REVEAL phase reverts on-chain",
-      "tx_hash": "0x6193441563df2304942ce4f04a82276e89888771ad25827ea23d8fabf0e09a31",
-      "status": "FINALIZED",
-      "consensus_state": "FINALIZED",
-      "execution_result": "EXPECTED_REVERT_DEFENSE",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x6193441563df2304942ce4f04a82276e89888771ad25827ea23d8fabf0e09a31"
-    },
-    {
-      "step": 8,
       "method": "close_reveal_phase",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
       "description": "Auction creator advances auction phase from REVEAL to SETTLE",
-      "tx_hash": "0xab3af3359a121bc214631651634109443af725c512d218935d8ce6302ac4394c",
+      "tx_hash": "0xf39f10113f116d379ecc307dfb0dfff367545badb05e346ebffb7007aef43ef0",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xab3af3359a121bc214631651634109443af725c512d218935d8ce6302ac4394c"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0xf39f10113f116d379ecc307dfb0dfff367545badb05e346ebffb7007aef43ef0"
     },
     {
-      "step": 9,
+      "step": 8,
       "method": "settle_auction",
       "account": "0x2457395Ad832692d3800296Bc74D31e25c2D932E",
-      "description": "FINAL SETTLEMENT: Deterministic code confirms phase is SETTLE, awards contract to lowest ELIGIBLE bid ($80)",
-      "tx_hash": "0x727c08a55cbd11886696da4507e7e3cbdcaa2b807f09cd1e71d00e8d31d63838",
+      "description": "FINAL SETTLEMENT: Deterministic code confirms phase is SETTLE, awards contract to lowest ELIGIBLE bid ($80), sets winner address and status to FINALIZED",
+      "tx_hash": "0x43cbcebbc0f9259942f01fe10dc059369c9fa0b9d30dbd4052eb9eeabd1e75fb",
       "status": "FINALIZED",
       "consensus_state": "FINALIZED",
       "execution_result": "SUCCESS",
-      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x727c08a55cbd11886696da4507e7e3cbdcaa2b807f09cd1e71d00e8d31d63838"
+      "explorer_url": "https://explorer-studio.genlayer.com/tx/0x43cbcebbc0f9259942f01fe10dc059369c9fa0b9d30dbd4052eb9eeabd1e75fb"
     }
   ]
 }

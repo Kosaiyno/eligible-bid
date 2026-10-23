@@ -180,7 +180,7 @@ class EligibleBid(gl.Contract):
             raise ValueError("Bid hash must be a valid 64-character SHA-256 hex string")
 
         replay_key = f"{int(aid)}_{str(sender_addr).lower()}"
-        if self.has_bidder_committed[replay_key]:
+        if replay_key in self.has_bidder_committed:
             raise ValueError("Bidder has already submitted a commitment for this auction")
 
         current_bid_id = self.bid_counter
