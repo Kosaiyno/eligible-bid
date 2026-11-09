@@ -118,12 +118,15 @@ class MockGL:
             def __init__(self):
                 self.mock_responses = {}
                 self.should_fail = False
+                self.call_count = 0
+                self.fail_on_call = None
 
             def set_url_response(self, url: str, body_bytes):
                 self.mock_responses[url] = body_bytes
 
             def get(self, url: str):
-                if self.should_fail:
+                self.call_count += 1
+                if self.should_fail or (self.fail_on_call is not None and self.call_count == self.fail_on_call):
                     raise RuntimeError("HTTP 403 Forbidden")
                 if url in self.mock_responses:
                     return MockWebResponse(self.mock_responses[url])
@@ -929,6 +932,133 @@ class TestEligibleBid(unittest.TestCase):
             self.assertEqual(settle["status"], "VOID_NO_BIDS")
         finally:
             mock_gl.nondet.web.should_fail = False
+
+    def test_asymmetric_fetch_leader_fails_validator_succeeds_reverts_consensus(self):
+        """Verify asymmetric failure (Leader fails fetch, Validator succeeds) reverts transaction leaving bid PENDING."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Asym 1", "Mandatory: TLS", u256(10000))
+
+        raw_b = b"Valid content"
+        content_hash = hashlib.sha256(raw_b).hexdigest()
+        url = "https://raw.githubusercontent.com/org/repo/asym1.md"
+        mock_gl.nondet.web.set_url_response(url, raw_b)
+
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 4000, "salt_asym1", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(4000), "salt_asym1", content_hash, url)
+
+        # Leader fails (call 1), validator succeeds (call 2)
+        mock_gl.nondet.web.call_count = 0
+        mock_gl.nondet.web.fail_on_call = 1
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                self.contract.adjudicate_bid_eligibility(bid_id)
+            self.assertIn("Consensus failed", str(ctx.exception))
+
+            # Transaction reverted -> state unchanged -> remains PENDING with 0 recorded attempts
+            bid_data = self.contract.get_bid(bid_id)
+            self.assertEqual(bid_data["eligibility_status"], "PENDING")
+            self.assertEqual(bid_data["adjudication_attempts"], 0)
+        finally:
+            mock_gl.nondet.web.fail_on_call = None
+
+    def test_asymmetric_fetch_leader_succeeds_validator_fails_reverts_consensus(self):
+        """Verify asymmetric failure (Leader succeeds, Validator fails fetch) reverts transaction leaving bid PENDING."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Asym 2", "Mandatory: TLS", u256(10000))
+
+        raw_b = b"Valid content"
+        content_hash = hashlib.sha256(raw_b).hexdigest()
+        url = "https://raw.githubusercontent.com/org/repo/asym2.md"
+        mock_gl.nondet.web.set_url_response(url, raw_b)
+
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 4000, "salt_asym2", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(4000), "salt_asym2", content_hash, url)
+
+        # Leader succeeds (call 1), validator fails (call 2)
+        mock_gl.nondet.web.call_count = 0
+        mock_gl.nondet.web.fail_on_call = 2
+        try:
+            with self.assertRaises(RuntimeError) as ctx:
+                self.contract.adjudicate_bid_eligibility(bid_id)
+            self.assertIn("Consensus failed", str(ctx.exception))
+
+            # Transaction reverted -> state unchanged -> remains PENDING with 0 recorded attempts
+            bid_data = self.contract.get_bid(bid_id)
+            self.assertEqual(bid_data["eligibility_status"], "PENDING")
+            self.assertEqual(bid_data["adjudication_attempts"], 0)
+        finally:
+            mock_gl.nondet.web.fail_on_call = None
+
+    def test_repeated_asymmetric_failures_resolved_by_timeout_recovery(self):
+        """Verify repeated asymmetric consensus failures are deterministically recovered by resolve_unresponsive_bid after timeout."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Timeout Recovery Auction", "Mandatory: Resilience", u256(10000))
+
+        raw_b = b"Valid content"
+        content_hash = hashlib.sha256(raw_b).hexdigest()
+        url = "https://flaky-cdn-domain.org/spec.md"
+        mock_gl.nondet.web.set_url_response(url, raw_b)
+
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 3500, "salt_timeout", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(3500), "salt_timeout", content_hash, url)
+
+        # Repeated asymmetric consensus failures
+        for _ in range(5):
+            mock_gl.nondet.web.call_count = 0
+            mock_gl.nondet.web.fail_on_call = 1
+            with self.assertRaises(RuntimeError):
+                self.contract.adjudicate_bid_eligibility(bid_id)
+
+        # Bid remains PENDING because consensus continuously reverted
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+
+        # 1. Attempting recovery prematurely before 3600s MUST fail (guards against griefing)
+        mock_gl.message.sender_address = self.attacker
+        with self.assertRaises(ValueError) as ctx:
+            self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertIn("Adjudication grace period active", str(ctx.exception))
+
+        # 2. Advance time past the 3600s deadline (simulating timeout expiration)
+        current_ts = int(self.contract.bid_reveal_timestamp[bid_id])
+        self.contract.bid_reveal_timestamp[bid_id] = u256(current_ts - 3601)
+
+        # 3. Recovery can now be invoked to deterministically advance bid to UNAVAILABLE
+        res = self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertEqual(res, "UNAVAILABLE")
+
+        bid_data = self.contract.get_bid(bid_id)
+        self.assertEqual(bid_data["eligibility_status"], "UNAVAILABLE")
+        self.assertIn("Adjudication timeout recovery", bid_data["adjudication_rationale"])
+
+        # 4. Reveal phase can now close smoothly!
+        mock_gl.message.sender_address = self.buyer
+        phase = self.contract.close_reveal_phase(aid)
+        self.assertEqual(phase, "SETTLE")
+
+        # 5. Settlement succeeds (UNAVAILABLE excluded from winning)
+        settle = self.contract.settle_auction(aid)
+        self.assertEqual(settle["status"], "VOID_NO_BIDS")
 
 if __name__ == "__main__":
     unittest.main()

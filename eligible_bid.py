@@ -2,6 +2,7 @@
 from genlayer import *
 import json
 import hashlib
+from datetime import datetime, timezone
 
 MAX_TITLE_CHARS = 100
 MAX_SPEC_CHARS = 1500
@@ -9,7 +10,8 @@ MAX_PROPOSAL_CHARS = 10000  # Explicit upper bound for complete bounded proposal
 MIN_QUOTE_CHARS = 5
 MAX_QUOTE_CHARS = 150
 MAX_URL_CHARS = 256
-MAX_FETCH_RETRIES = 3
+MAX_FETCH_RETRIES = 3        # Number of permitted simultaneous fetch failure attempts before UNAVAILABLE
+ADJUDICATION_TIMEOUT_SECONDS = 3600  # 1 hour grace period for consensus retries before recovery can be invoked
 
 def _to_address(val) -> Address:
     """Normalizes address input (Address, int big-number from Studio, or hex str) into Address."""
@@ -66,6 +68,7 @@ class EligibleBid(gl.Contract):
     bid_verbatim_quote: TreeMap[u256, str]
     bid_adjudication_rationale: TreeMap[u256, str]
     bid_adjudication_attempts: TreeMap[u256, u256]    # Number of adjudication/fetch attempts
+    bid_reveal_timestamp: TreeMap[u256, u256]         # Unix timestamp when bid was revealed (for timeout recovery)
 
     # Anti-replay mapping: "auctionId_bidderAddress" -> bool
     has_bidder_committed: TreeMap[str, bool]
@@ -124,7 +127,8 @@ class EligibleBid(gl.Contract):
             "eligibility_status": self.bid_eligibility_status[bid],
             "verbatim_quote": self.bid_verbatim_quote[bid],
             "adjudication_rationale": self.bid_adjudication_rationale[bid],
-            "adjudication_attempts": int(self.bid_adjudication_attempts[bid])
+            "adjudication_attempts": int(self.bid_adjudication_attempts[bid]),
+            "reveal_timestamp": int(self.bid_reveal_timestamp[bid])
         }
 
     # =========================================================================
@@ -212,6 +216,7 @@ class EligibleBid(gl.Contract):
         self.bid_verbatim_quote[current_bid_id] = ""
         self.bid_adjudication_rationale[current_bid_id] = ""
         self.bid_adjudication_attempts[current_bid_id] = u256(0)
+        self.bid_reveal_timestamp[current_bid_id] = u256(0)
 
         self.has_bidder_committed[replay_key] = True
         self.bid_counter = current_bid_id + u256(1)
@@ -298,6 +303,7 @@ class EligibleBid(gl.Contract):
         self.bid_price_cents[bid] = p_cents
         self.bid_proposal_content_hash[bid] = clean_content_hash
         self.bid_proposal_url[bid] = clean_url
+        self.bid_reveal_timestamp[bid] = u256(int(datetime.now(timezone.utc).timestamp()))
         return True
 
     @gl.public.write
@@ -593,6 +599,53 @@ class EligibleBid(gl.Contract):
         self.bid_verbatim_quote[bid] = quote
         self.bid_adjudication_rationale[bid] = rationale
         return decision
+
+    @gl.public.write
+    def resolve_unresponsive_bid(self, bid_id: u256) -> str:
+        """
+        Recovery mechanism for persistent or asymmetric consensus failures:
+        If a revealed bid remains PENDING because validators repeatedly disagree on network fetching
+        (asymmetric fetch failures) or nondeterministic consensus repeatedly fails, this deterministic
+        recovery method advances the bid to a terminal UNAVAILABLE state once ADJUDICATION_TIMEOUT_SECONDS
+        have elapsed since the bid was revealed.
+        
+        Guarantees:
+        - Prevents permanent auction deadlock when consensus cannot resolve an un-fetchable proposal.
+        - Strict grace period check: Rejects premature calls before the deadline, preventing arbitrary callers
+          from exhausting another bidder's retry allowance without a genuine recovery condition.
+        - Produces terminal status UNAVAILABLE (distinguishable from technical INELIGIBLE and excluded from settlement).
+        """
+        bid = u256(bid_id)
+        if bid >= self.bid_counter:
+            raise ValueError("Bid does not exist")
+        if not self.bid_revealed[bid]:
+            raise ValueError("Bid is not revealed")
+        if self.bid_eligibility_status[bid] != "PENDING":
+            return f"ALREADY_TERMINAL: Status is {self.bid_eligibility_status[bid]}"
+
+        aid = self.bid_auction_id[bid]
+        if self.auction_status[aid] != "OPEN":
+            raise ValueError(f"Cannot resolve bid: auction is {self.auction_status[aid]}")
+        if self.auction_phase[aid] != "REVEAL":
+            raise ValueError(f"Cannot resolve bid: auction phase must be REVEAL (current: {self.auction_phase[aid]})")
+
+        current_time = int(datetime.now(timezone.utc).timestamp())
+        reveal_time = int(self.bid_reveal_timestamp[bid])
+        elapsed = current_time - reveal_time
+
+        if elapsed < ADJUDICATION_TIMEOUT_SECONDS:
+            remaining = ADJUDICATION_TIMEOUT_SECONDS - elapsed
+            raise ValueError(
+                f"Adjudication grace period active: {remaining}s remaining before timeout recovery can be invoked"
+            )
+
+        # Adjudication deadline expired: Deterministically transition bid to terminal UNAVAILABLE status
+        self.bid_eligibility_status[bid] = "UNAVAILABLE"
+        self.bid_adjudication_rationale[bid] = (
+            f"Adjudication timeout recovery: Proposal remained unverified after {elapsed}s "
+            f"(exceeded {ADJUDICATION_TIMEOUT_SECONDS}s deadline). Marked UNAVAILABLE."
+        )
+        return "UNAVAILABLE"
 
     @gl.public.write
     def close_reveal_phase(self, auction_id: u256) -> str:
