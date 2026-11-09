@@ -12,8 +12,8 @@
   "contract": {
     "name": "EligibleBid",
     "file": "eligible_bid.py",
-    "address": "0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA",
-    "explorer_url": "https://explorer-studio.genlayer.com/address/0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA"
+    "address": "0x2287aF84f37CaDC05067CfF6FF569180Bc4e2c9d",
+    "explorer_url": "https://explorer-studio.genlayer.com/address/0x2287aF84f37CaDC05067CfF6FF569180Bc4e2c9d"
   },
   "evidence_sources": {
     "repository": "https://github.com/Kosaiyno/eligible-bid",

@@ -1,10 +1,10 @@
 # EligibleBid — Sealed-Bid Reverse Auction with AI Technical Eligibility Adjudication
 
-[![GenLayer StudioNet](https://img.shields.io/badge/GenLayer-StudioNet%20(61999)-blue)](https://explorer-studio.genlayer.com/address/0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA)
+[![GenLayer StudioNet](https://img.shields.io/badge/GenLayer-StudioNet%20(61999)-blue)](https://explorer-studio.genlayer.com/address/0x2287aF84f37CaDC05067CfF6FF569180Bc4e2c9d)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 > **Category**: GenLayer Portal — Builder -> Intelligent Contracts  
-> **Deployed Contract Address**: [`0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA`](https://explorer-studio.genlayer.com/address/0x8aC38b5a7F25722e33a97e618d8b54cF48D553BA)  
+> **Deployed Contract Address**: [`0x2287aF84f37CaDC05067CfF6FF569180Bc4e2c9d`](https://explorer-studio.genlayer.com/address/0x2287aF84f37CaDC05067CfF6FF569180Bc4e2c9d)  
 > **Proof Manifest**: [`deploy/proof.json`](deploy/proof.json)
 
 ---
@@ -47,16 +47,31 @@ All steps of the full adversarial lifecycle have been executed and finalized on 
 The automated test suite runs in direct mode with mocked GenLayer primitives:
 
 ```powershell
-uv run python -m unittest discover -s tests
+python -m unittest discover -s tests -v
 ```
 
-### Coverage (9 Passing Tests):
-- `test_initialization`: Zero state, counter tracking, and owner binding.
-- `test_create_auction_validations_and_initial_phase`: Enforces non-empty title, spec floor, positive ceiling, and initial `COMMIT` phase.
-- `test_commitment_and_anti_replay`: Hash validation and anti-replay blocking duplicate bids.
-- `test_phase_boundaries_early_reveal_and_early_settle_blocked`: Strict phase enforcement blocking early reveals and settlements.
-- `test_reveal_unauthorized_callers_and_preimage_tampering`: Unauthorized reveal rejected; price cap enforcement; tampered content hash / price preimage rejection.
-- `test_adjudication_fail_closed_on_tampered_content_hash`: Content hash tampering fails closed to `INELIGIBLE`.
-- `test_settlement_core_invariant_cheapest_eligible_wins`: Confirms \$80 conforming bid defeats \$20 low-baller.
-- `test_settlement_void_when_no_eligible_bids`: Correctly transitions to `VOID_NO_BIDS`.
-- `test_adversarial_leader_quote_clamp`: Missing quote forcefully clamped to `INELIGIBLE`.
+### Coverage (29 Passing Tests):
+- **Steward Issue 1 (Pending Bid Invariants & Recovery)**:
+  - `test_1_reveal_two_bids_leave_one_pending_reverts_close_reveal`: Confirms `close_reveal_phase()` strictly reverts when any revealed bid is `PENDING`.
+  - `test_2_adjudicate_both_allows_close_reveal_phase`: Confirms `close_reveal_phase()` succeeds only when all revealed bids are adjudicated.
+  - `test_phase_boundaries_early_reveal_and_early_settle_blocked`: Confirms settlement reverts during `COMMIT` and `REVEAL` phases.
+  - `test_settlement_defense_in_depth_pending_bids_block_settle`: Defense-in-depth: guarantees `settle_auction()` reverts if any revealed bid remains `PENDING`.
+  - `test_unreachable_url_retry_and_recovery_policy`: 3-attempt bounded retry policy for transient fetch failures.
+  - `test_unreachable_url_exhausted_retries_produces_unavailable`: Exhausted retries transition bid to `UNAVAILABLE` (excluded from settlement).
+  - `test_case_1_no_adjudication_attempt_then_timeout`: 1-hour adjudication deadline (`resolve_unresponsive_bid`) marks unadjudicated bids `UNAVAILABLE`.
+  - `test_case_2_repeated_simultaneous_fetch_failures_then_timeout`: Repeated fetch failures resolved via timeout recovery.
+  - `test_case_3_repeated_asymmetric_fetch_failures_then_timeout`: Repeated asymmetric consensus disagreement resolved deterministically after 1-hour window.
+  - `test_case_4_successful_fetch_and_adjudication_before_timeout`: Valid adjudication before deadline marks `ELIGIBLE` and prevents timeout override.
+  - `test_case_5_recovery_attempted_just_before_and_after_deadline`: Strict grace-period enforcement: 3599s reverts, 3601s succeeds.
+- **Steward Issue 2 (Complete Bounded Proposals & Document Verification)**:
+  - `test_3_proposal_exactly_10000_chars_assessed_completely`: Complete 10,000-character proposals evaluated in full without silent truncation.
+  - `test_4_proposal_10001_chars_rejected_as_ineligible`: Proposals exceeding 10,000 characters deterministically rejected before LLM evaluation.
+  - `test_5_changed_fetched_document_causes_hash_mismatch_rejection`: Content hash mismatch fails closed to `INELIGIBLE`.
+  - `test_bytearray_body_preserves_raw_bytes_hash`: Bytearray responses preserved as raw bytes.
+  - `test_adversarial_leader_quote_clamp`: Verbatim quote grounding verified in proposal text.
+  - `test_validator_rejects_hallucinated_eligible_leader`: Independent validator rejects hallucinated ELIGIBLE leader on non-compliant spec.
+- **Core Mechanism & Input Bounds**:
+  - `test_settlement_core_invariant_cheapest_eligible_wins`: Non-compliant low-ball bids rejected; lowest ELIGIBLE bid wins.
+  - `test_settlement_void_when_no_eligible_bids`: Correctly transitions to `VOID_NO_BIDS`.
+  - `test_create_auction_rejects_oversized_title_and_spec`: Input length bounds enforced on creation.
+  - `test_reveal_bid_validates_url_scheme_and_length`: HTTPS/HTTP URL scheme and length validation.
