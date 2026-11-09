@@ -880,8 +880,8 @@ class TestEligibleBid(unittest.TestCase):
         self.assertEqual(bid_data["eligibility_status"], "ELIGIBLE")
         self.assertEqual(bid_data["adjudication_attempts"], 2)
 
-    def test_unreachable_url_exhausted_retries_produces_failed_to_verify(self):
-        """Verify that after 3 failed fetch attempts, bid becomes FAILED_TO_VERIFY (distinct from INELIGIBLE) and auction unblocks."""
+    def test_unreachable_url_exhausted_retries_produces_unavailable(self):
+        """Verify that after 3 failed fetch attempts, bid becomes UNAVAILABLE (distinct from INELIGIBLE) and auction unblocks."""
         mock_gl.message.sender_address = self.buyer
         aid = self.contract.create_auction("Dead URL Auction", "Mandatory: Uptime", u256(20000))
 
@@ -910,21 +910,21 @@ class TestEligibleBid(unittest.TestCase):
             self.assertIn("Attempt 2/3", res2)
             self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
 
-            # Attempt 3 -> FAILED_TO_VERIFY (Explicit failure policy reached)
+            # Attempt 3 -> UNAVAILABLE (Explicit failure policy reached)
             res3 = self.contract.adjudicate_bid_eligibility(bid_id)
-            self.assertEqual(res3, "FAILED_TO_VERIFY")
+            self.assertEqual(res3, "UNAVAILABLE")
 
             bid_data = self.contract.get_bid(bid_id)
-            self.assertEqual(bid_data["eligibility_status"], "FAILED_TO_VERIFY")
+            self.assertEqual(bid_data["eligibility_status"], "UNAVAILABLE")
             self.assertEqual(bid_data["adjudication_attempts"], 3)
-            self.assertIn("FAILED_TO_VERIFY", bid_data["adjudication_rationale"])
+            self.assertIn("UNAVAILABLE", bid_data["adjudication_rationale"])
 
             # Verify reveal phase can now close because no bids remain PENDING
             mock_gl.message.sender_address = self.buyer
             phase = self.contract.close_reveal_phase(aid)
             self.assertEqual(phase, "SETTLE")
 
-            # Verify FAILED_TO_VERIFY is excluded from winning settlement
+            # Verify UNAVAILABLE is excluded from winning settlement
             settle = self.contract.settle_auction(aid)
             self.assertEqual(settle["status"], "VOID_NO_BIDS")
         finally:

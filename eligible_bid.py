@@ -62,7 +62,7 @@ class EligibleBid(gl.Contract):
     bid_price_cents: TreeMap[u256, u256]
     bid_proposal_content_hash: TreeMap[u256, str]      # Bound SHA-256 hash of proposal document
     bid_proposal_url: TreeMap[u256, str]
-    bid_eligibility_status: TreeMap[u256, str]         # "PENDING", "ELIGIBLE", "INELIGIBLE", "FAILED_TO_VERIFY"
+    bid_eligibility_status: TreeMap[u256, str]         # "PENDING", "ELIGIBLE", "INELIGIBLE", "UNAVAILABLE"
     bid_verbatim_quote: TreeMap[u256, str]
     bid_adjudication_rationale: TreeMap[u256, str]
     bid_adjudication_attempts: TreeMap[u256, u256]    # Number of adjudication/fetch attempts
@@ -313,7 +313,7 @@ class EligibleBid(gl.Contract):
         - Cryptographic Content Binding: SHA-256 of raw fetched bytes must deterministically match the committed hash.
         - Complete Bounded Proposal Assessment: Evaluates the complete proposal up to MAX_PROPOSAL_CHARS (10,000 chars) without silent truncation.
         - Hard Evidence Ingestion Failures: Over-limit documents (>10,000 chars) or hash mismatches trigger hard INELIGIBLE in deterministic Python.
-        - Transient vs Deterministic Distinction: Deterministic evidence failures resolve to INELIGIBLE; transient consensus/network failures revert so the bid remains retryable in PENDING.
+        - Bounded Fetch Retry Policy: Simultaneous fetch failures keep bid PENDING for retries; exhausted retries (>3 attempts) transition to UNAVAILABLE (distinct from INELIGIBLE) to avoid freezing the auction.
         """
         bid = u256(bid_id)
         if bid >= self.bid_counter:
@@ -550,14 +550,14 @@ class EligibleBid(gl.Contract):
                 self.bid_adjudication_rationale[bid] = rationale
                 return f"FETCH_FAILED_RETRYABLE: Attempt {failures}/{MAX_FETCH_RETRIES}"
             else:
-                # Exhausted retry limit: Mark as FAILED_TO_VERIFY (distinct from INELIGIBLE technical rejection)
-                self.bid_eligibility_status[bid] = "FAILED_TO_VERIFY"
+                # Exhausted retry limit: Mark as UNAVAILABLE (distinct from INELIGIBLE technical rejection)
+                self.bid_eligibility_status[bid] = "UNAVAILABLE"
                 rationale = (
                     f"Adjudication aborted: Proposal URL remained unavailable after {failures} attempts ({err_reason}). "
-                    f"Classified as FAILED_TO_VERIFY."
+                    f"Classified as UNAVAILABLE."
                 )
                 self.bid_adjudication_rationale[bid] = rationale
-                return "FAILED_TO_VERIFY"
+                return "UNAVAILABLE"
 
         # Successful fetch: Adjudication succeeded, record attempt count
         self.bid_adjudication_attempts[bid] = u256(int(self.bid_adjudication_attempts[bid]) + 1)
