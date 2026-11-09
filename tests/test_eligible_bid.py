@@ -1049,7 +1049,7 @@ class TestEligibleBid(unittest.TestCase):
 
         bid_data = self.contract.get_bid(bid_id)
         self.assertEqual(bid_data["eligibility_status"], "UNAVAILABLE")
-        self.assertIn("Adjudication timeout recovery", bid_data["adjudication_rationale"])
+        self.assertIn("Adjudication deadline expired", bid_data["adjudication_rationale"])
 
         # 4. Reveal phase can now close smoothly!
         mock_gl.message.sender_address = self.buyer
@@ -1059,6 +1059,185 @@ class TestEligibleBid(unittest.TestCase):
         # 5. Settlement succeeds (UNAVAILABLE excluded from winning)
         settle = self.contract.settle_auction(aid)
         self.assertEqual(settle["status"], "VOID_NO_BIDS")
+
+    def test_case_1_no_adjudication_attempt_then_timeout(self):
+        """Case 1: Bid is revealed, no adjudication is ever attempted, then 1-hour timeout expires -> recovery marks UNAVAILABLE."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Case 1 Auction", "Mandatory: Spec", u256(10000))
+
+        content_hash = "a" * 64
+        url = "https://example.com/unattempted.md"
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 5000, "salt_c1", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(5000), "salt_c1", content_hash, url)
+
+        # No adjudication attempt made! Bid remains PENDING
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+        self.assertEqual(self.contract.get_bid(bid_id)["adjudication_attempts"], 0)
+
+        # 1-hour timeout expires:
+        ts = int(self.contract.bid_reveal_timestamp[bid_id])
+        self.contract.bid_reveal_timestamp[bid_id] = u256(ts - 3601)
+
+        # Recovery can now be invoked:
+        res = self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertEqual(res, "UNAVAILABLE")
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "UNAVAILABLE")
+
+        # Reveal phase can now close because no bids remain PENDING:
+        mock_gl.message.sender_address = self.buyer
+        phase = self.contract.close_reveal_phase(aid)
+        self.assertEqual(phase, "SETTLE")
+
+    def test_case_2_repeated_simultaneous_fetch_failures_then_timeout(self):
+        """Case 2: Repeated simultaneous fetch failures (exhausted retries or timeout) transitions bid to UNAVAILABLE."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Case 2 Auction", "Mandatory: Spec", u256(10000))
+
+        content_hash = "b" * 64
+        url = "https://dead-server.org/spec.md"
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 6000, "salt_c2", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(6000), "salt_c2", content_hash, url)
+
+        # Both leader & validator fail to fetch:
+        mock_gl.nondet.web.should_fail = True
+        try:
+            self.contract.adjudicate_bid_eligibility(bid_id)  # attempt 1 -> PENDING
+            self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+
+            self.contract.adjudicate_bid_eligibility(bid_id)  # attempt 2 -> PENDING
+            self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+
+            # 3rd attempt resolves directly to UNAVAILABLE:
+            res = self.contract.adjudicate_bid_eligibility(bid_id)
+            self.assertEqual(res, "UNAVAILABLE")
+            self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "UNAVAILABLE")
+
+            # Calling resolve_unresponsive_bid on already terminal bid returns ALREADY_TERMINAL:
+            res_term = self.contract.resolve_unresponsive_bid(bid_id)
+            self.assertIn("ALREADY_TERMINAL", res_term)
+        finally:
+            mock_gl.nondet.web.should_fail = False
+
+    def test_case_3_repeated_asymmetric_fetch_failures_then_timeout(self):
+        """Case 3: Repeated asymmetric consensus disagreements (leader fails/validator succeeds) resolved by timeout recovery."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Case 3 Auction", "Mandatory: Spec", u256(10000))
+
+        raw_b = b"Spec content"
+        content_hash = hashlib.sha256(raw_b).hexdigest()
+        url = "https://asym-flaky.org/spec.md"
+        mock_gl.nondet.web.set_url_response(url, raw_b)
+
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 7000, "salt_c3", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(7000), "salt_c3", content_hash, url)
+
+        # Repeated asymmetric failures cause consensus revert:
+        for _ in range(4):
+            mock_gl.nondet.web.call_count = 0
+            mock_gl.nondet.web.fail_on_call = 1
+            with self.assertRaises(RuntimeError):
+                self.contract.adjudicate_bid_eligibility(bid_id)
+
+        # Bid is still PENDING because reverts rolled back transactions:
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+
+        # After 1 hour timeout:
+        ts = int(self.contract.bid_reveal_timestamp[bid_id])
+        self.contract.bid_reveal_timestamp[bid_id] = u256(ts - 3601)
+
+        res = self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertEqual(res, "UNAVAILABLE")
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "UNAVAILABLE")
+
+    def test_case_4_successful_fetch_and_adjudication_before_timeout(self):
+        """Case 4: Successful fetch and adjudication before timeout marks bid ELIGIBLE, preventing subsequent timeout override."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Case 4 Auction", "Mandatory: Encryption", u256(10000))
+
+        raw_b = b"Full proposal meeting mandatory requirements with Encryption and zero-knowledge."
+        content_hash = hashlib.sha256(raw_b).hexdigest()
+        url = "https://reliable-host.org/spec.md"
+        mock_gl.nondet.web.set_url_response(url, raw_b)
+
+        mock_gl.nondet.mock_decision = "ELIGIBLE"
+        mock_gl.nondet.mock_quote = "Encryption and zero-knowledge"
+
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 3000, "salt_c4", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(3000), "salt_c4", content_hash, url)
+
+        # Adjudication succeeds normally before timeout:
+        decision = self.contract.adjudicate_bid_eligibility(bid_id)
+        self.assertEqual(decision, "ELIGIBLE")
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "ELIGIBLE")
+
+        # Time advances past 1-hour deadline:
+        ts = int(self.contract.bid_reveal_timestamp[bid_id])
+        self.contract.bid_reveal_timestamp[bid_id] = u256(ts - 3601)
+
+        # Attempting recovery on ELIGIBLE bid must NOT alter its status:
+        res = self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertIn("ALREADY_TERMINAL", res)
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "ELIGIBLE")
+
+    def test_case_5_recovery_attempted_just_before_and_after_deadline(self):
+        """Case 5: Recovery attempted just before deadline (3599s) is rejected; attempted just after deadline (3601s) succeeds."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Case 5 Auction", "Mandatory: Spec", u256(10000))
+
+        content_hash = "c" * 64
+        url = "https://boundary-test.org/spec.md"
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 5000, "salt_c5", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(5000), "salt_c5", content_hash, url)
+
+        ts = int(self.contract.bid_reveal_timestamp[bid_id])
+
+        # 1. Just before deadline: 3599 seconds elapsed (1s remaining) -> MUST REVERT
+        self.contract.bid_reveal_timestamp[bid_id] = u256(ts - 3599)
+        with self.assertRaises(ValueError) as ctx:
+            self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertIn("Adjudication grace period active", str(ctx.exception))
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+
+        # 2. Just after deadline: 3601 seconds elapsed -> MUST SUCCEED
+        self.contract.bid_reveal_timestamp[bid_id] = u256(ts - 3601)
+        res = self.contract.resolve_unresponsive_bid(bid_id)
+        self.assertEqual(res, "UNAVAILABLE")
+        self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "UNAVAILABLE")
 
 if __name__ == "__main__":
     unittest.main()

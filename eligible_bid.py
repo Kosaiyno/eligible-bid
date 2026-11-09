@@ -36,8 +36,11 @@ class EligibleBid(gl.Contract):
     2. REVEAL: Auction creator closes commit phase. Bidders reveal price, salt, proposal content hash, and proposal URL.
        Validators independently adjudicate technical proposal eligibility under the Equivalence Principle and verify content hash binding.
        The reveal phase CANNOT close while any revealed bid is still pending eligibility adjudication.
+       HARD ADJUDICATION DEADLINE: Every revealed bid has an explicit 1-hour adjudication window (ADJUDICATION_TIMEOUT_SECONDS = 3600)
+       from the moment of reveal. If a revealed bid remains PENDING past its deadline (due to unreachable URLs, asymmetric consensus
+       disagreements, or lack of adjudication), it is deterministically classified as UNAVAILABLE via resolve_unresponsive_bid().
        Nobody can settle early during the REVEAL phase.
-    3. SETTLE: Auction creator closes reveal phase after all revealed bids are adjudicated.
+    3. SETTLE: Auction creator closes reveal phase after all revealed bids reach a terminal status (ELIGIBLE, INELIGIBLE, UNAVAILABLE).
        Permissionless settlement deterministically awards the contract to the lowest-priced ELIGIBLE bid.
        Low-ballers with non-compliant, over-limit, or adversarial proposals are disqualified.
     """
@@ -115,6 +118,9 @@ class EligibleBid(gl.Contract):
         if bid >= self.bid_counter:
             return {"error": "Bid does not exist"}
 
+        reveal_ts = int(self.bid_reveal_timestamp[bid])
+        deadline = reveal_ts + ADJUDICATION_TIMEOUT_SECONDS if reveal_ts > 0 else 0
+
         return {
             "bid_id": int(bid),
             "auction_id": int(self.bid_auction_id[bid]),
@@ -128,7 +134,8 @@ class EligibleBid(gl.Contract):
             "verbatim_quote": self.bid_verbatim_quote[bid],
             "adjudication_rationale": self.bid_adjudication_rationale[bid],
             "adjudication_attempts": int(self.bid_adjudication_attempts[bid]),
-            "reveal_timestamp": int(self.bid_reveal_timestamp[bid])
+            "reveal_timestamp": reveal_ts,
+            "adjudication_deadline": deadline
         }
 
     # =========================================================================
@@ -603,17 +610,16 @@ class EligibleBid(gl.Contract):
     @gl.public.write
     def resolve_unresponsive_bid(self, bid_id: u256) -> str:
         """
-        Recovery mechanism for persistent or asymmetric consensus failures:
-        If a revealed bid remains PENDING because validators repeatedly disagree on network fetching
-        (asymmetric fetch failures) or nondeterministic consensus repeatedly fails, this deterministic
-        recovery method advances the bid to a terminal UNAVAILABLE state once ADJUDICATION_TIMEOUT_SECONDS
-        have elapsed since the bid was revealed.
+        Enforces the auction's hard adjudication deadline (1 hour from reveal).
+        Every revealed bid must be adjudicated before its 1-hour window expires (ADJUDICATION_TIMEOUT_SECONDS = 3600).
+        If a revealed bid remains PENDING past its deadline (whether due to un-fetchable URLs, persistent asymmetric
+        consensus disagreements, or unattempted adjudication), this deterministic method advances the bid to
+        terminal UNAVAILABLE status so the auction cannot be blocked indefinitely.
         
         Guarantees:
-        - Prevents permanent auction deadlock when consensus cannot resolve an un-fetchable proposal.
-        - Strict grace period check: Rejects premature calls before the deadline, preventing arbitrary callers
-          from exhausting another bidder's retry allowance without a genuine recovery condition.
-        - Produces terminal status UNAVAILABLE (distinguishable from technical INELIGIBLE and excluded from settlement).
+        - Deterministic Auction Progress: Ensures every revealed bid reaches a terminal status (ELIGIBLE, INELIGIBLE, UNAVAILABLE).
+        - Strict Grace Period: Rejects premature calls before the 1-hour deadline expires, protecting bidders.
+        - Terminal Classification: Produces UNAVAILABLE status (excluded from winner selection in settlement).
         """
         bid = u256(bid_id)
         if bid >= self.bid_counter:
@@ -639,11 +645,12 @@ class EligibleBid(gl.Contract):
                 f"Adjudication grace period active: {remaining}s remaining before timeout recovery can be invoked"
             )
 
-        # Adjudication deadline expired: Deterministically transition bid to terminal UNAVAILABLE status
+        # 1-hour adjudication deadline expired: Transition bid to terminal UNAVAILABLE status
         self.bid_eligibility_status[bid] = "UNAVAILABLE"
         self.bid_adjudication_rationale[bid] = (
-            f"Adjudication timeout recovery: Proposal remained unverified after {elapsed}s "
-            f"(exceeded {ADJUDICATION_TIMEOUT_SECONDS}s deadline). Marked UNAVAILABLE."
+            f"Adjudication deadline expired: Proposal was not verified within the 1-hour window "
+            f"({elapsed}s elapsed, exceeded {ADJUDICATION_TIMEOUT_SECONDS}s deadline). "
+            f"Marked UNAVAILABLE."
         )
         return "UNAVAILABLE"
 
