@@ -832,10 +832,58 @@ class TestEligibleBid(unittest.TestCase):
             self.contract.reveal_bid(bid_id2, u256(6000), "salt_url", content_hash, oversized_url)
         self.assertIn("Proposal URL exceeds maximum length", str(ctx.exception))
 
-    def test_unreachable_url_consensus_ineligible_prevents_auction_freeze(self):
-        """Verify that when a proposal URL fails to fetch, consensus agrees on INELIGIBLE so the auction does NOT freeze."""
+    def test_unreachable_url_retry_and_recovery_policy(self):
+        """Verify bounded retry policy: temporary fetch failure keeps bid PENDING; subsequent recovery succeeds."""
         mock_gl.message.sender_address = self.buyer
-        aid = self.contract.create_auction("Anti-Freeze Auction", "Mandatory: Reliability", u256(20000))
+        aid = self.contract.create_auction("Retry Auction", "Mandatory: Resilience", u256(20000))
+
+        raw_b = b"Resilient architecture specification covering AES-256 encryption."
+        content_hash = hashlib.sha256(raw_b).hexdigest()
+        url = "https://raw.githubusercontent.com/org/repo/resilient.md"
+        mock_gl.nondet.web.set_url_response(url, raw_b)
+
+        mock_gl.message.sender_address = self.bidder1
+        committed_hash = make_hash(str(self.bidder1), 5000, "salt_retry", content_hash, url)
+        bid_id = self.contract.submit_bid_commitment(aid, committed_hash)
+
+        mock_gl.message.sender_address = self.buyer
+        self.contract.close_commit_phase(aid)
+
+        mock_gl.message.sender_address = self.bidder1
+        self.contract.reveal_bid(bid_id, u256(5000), "salt_retry", content_hash, url)
+
+        # Attempt 1: Transient network outage causes fetch failure
+        mock_gl.nondet.web.should_fail = True
+        res1 = self.contract.adjudicate_bid_eligibility(bid_id)
+        self.assertIn("FETCH_FAILED_RETRYABLE: Attempt 1/3", res1)
+
+        # Bid must NOT be prematurely disqualified! Remains PENDING for retry
+        bid_data = self.contract.get_bid(bid_id)
+        self.assertEqual(bid_data["eligibility_status"], "PENDING")
+        self.assertEqual(bid_data["adjudication_attempts"], 1)
+
+        # Closing reveal phase MUST be blocked while bid remains PENDING
+        mock_gl.message.sender_address = self.buyer
+        with self.assertRaises(ValueError) as ctx:
+            self.contract.close_reveal_phase(aid)
+        self.assertIn("still pending eligibility", str(ctx.exception))
+
+        # Attempt 2: Network recovers! Proposal is successfully fetched and adjudicated
+        mock_gl.nondet.web.should_fail = False
+        mock_gl.nondet.mock_decision = "ELIGIBLE"
+        mock_gl.nondet.mock_quote = "AES-256 encryption"
+
+        res2 = self.contract.adjudicate_bid_eligibility(bid_id)
+        self.assertEqual(res2, "ELIGIBLE")
+
+        bid_data = self.contract.get_bid(bid_id)
+        self.assertEqual(bid_data["eligibility_status"], "ELIGIBLE")
+        self.assertEqual(bid_data["adjudication_attempts"], 2)
+
+    def test_unreachable_url_exhausted_retries_produces_failed_to_verify(self):
+        """Verify that after 3 failed fetch attempts, bid becomes FAILED_TO_VERIFY (distinct from INELIGIBLE) and auction unblocks."""
+        mock_gl.message.sender_address = self.buyer
+        aid = self.contract.create_auction("Dead URL Auction", "Mandatory: Uptime", u256(20000))
 
         mock_gl.message.sender_address = self.bidder1
         dead_url = "https://broken-dead-link.invalid/proposal.txt"
@@ -849,20 +897,34 @@ class TestEligibleBid(unittest.TestCase):
         mock_gl.message.sender_address = self.bidder1
         self.contract.reveal_bid(bid_id, u256(5000), "salt_dead", fake_hash, dead_url)
 
-        # Simulate web failure for dead URL
+        # Simulate permanent URL outage
         mock_gl.nondet.web.should_fail = True
         try:
-            decision = self.contract.adjudicate_bid_eligibility(bid_id)
-            self.assertEqual(decision, "INELIGIBLE")
-            bid_data = self.contract.get_bid(bid_id)
-            self.assertEqual(bid_data["eligibility_status"], "INELIGIBLE")
-            self.assertIn("fetch failed", bid_data["adjudication_rationale"])
+            # Attempt 1 -> PENDING
+            res1 = self.contract.adjudicate_bid_eligibility(bid_id)
+            self.assertIn("Attempt 1/3", res1)
+            self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
 
-            # Verify reveal phase can now close smoothly because no bids are PENDING
+            # Attempt 2 -> PENDING
+            res2 = self.contract.adjudicate_bid_eligibility(bid_id)
+            self.assertIn("Attempt 2/3", res2)
+            self.assertEqual(self.contract.get_bid(bid_id)["eligibility_status"], "PENDING")
+
+            # Attempt 3 -> FAILED_TO_VERIFY (Explicit failure policy reached)
+            res3 = self.contract.adjudicate_bid_eligibility(bid_id)
+            self.assertEqual(res3, "FAILED_TO_VERIFY")
+
+            bid_data = self.contract.get_bid(bid_id)
+            self.assertEqual(bid_data["eligibility_status"], "FAILED_TO_VERIFY")
+            self.assertEqual(bid_data["adjudication_attempts"], 3)
+            self.assertIn("FAILED_TO_VERIFY", bid_data["adjudication_rationale"])
+
+            # Verify reveal phase can now close because no bids remain PENDING
             mock_gl.message.sender_address = self.buyer
             phase = self.contract.close_reveal_phase(aid)
             self.assertEqual(phase, "SETTLE")
 
+            # Verify FAILED_TO_VERIFY is excluded from winning settlement
             settle = self.contract.settle_auction(aid)
             self.assertEqual(settle["status"], "VOID_NO_BIDS")
         finally:

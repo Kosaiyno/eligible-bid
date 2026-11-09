@@ -9,6 +9,7 @@ MAX_PROPOSAL_CHARS = 10000  # Explicit upper bound for complete bounded proposal
 MIN_QUOTE_CHARS = 5
 MAX_QUOTE_CHARS = 150
 MAX_URL_CHARS = 256
+MAX_FETCH_RETRIES = 3
 
 def _to_address(val) -> Address:
     """Normalizes address input (Address, int big-number from Studio, or hex str) into Address."""
@@ -61,9 +62,10 @@ class EligibleBid(gl.Contract):
     bid_price_cents: TreeMap[u256, u256]
     bid_proposal_content_hash: TreeMap[u256, str]      # Bound SHA-256 hash of proposal document
     bid_proposal_url: TreeMap[u256, str]
-    bid_eligibility_status: TreeMap[u256, str]         # "PENDING", "ELIGIBLE", "INELIGIBLE", "UNCLEAR"
+    bid_eligibility_status: TreeMap[u256, str]         # "PENDING", "ELIGIBLE", "INELIGIBLE", "FAILED_TO_VERIFY"
     bid_verbatim_quote: TreeMap[u256, str]
     bid_adjudication_rationale: TreeMap[u256, str]
+    bid_adjudication_attempts: TreeMap[u256, u256]    # Number of adjudication/fetch attempts
 
     # Anti-replay mapping: "auctionId_bidderAddress" -> bool
     has_bidder_committed: TreeMap[str, bool]
@@ -121,7 +123,8 @@ class EligibleBid(gl.Contract):
             "proposal_url": self.bid_proposal_url[bid],
             "eligibility_status": self.bid_eligibility_status[bid],
             "verbatim_quote": self.bid_verbatim_quote[bid],
-            "adjudication_rationale": self.bid_adjudication_rationale[bid]
+            "adjudication_rationale": self.bid_adjudication_rationale[bid],
+            "adjudication_attempts": int(self.bid_adjudication_attempts[bid])
         }
 
     # =========================================================================
@@ -208,6 +211,7 @@ class EligibleBid(gl.Contract):
         self.bid_eligibility_status[current_bid_id] = "PENDING"
         self.bid_verbatim_quote[current_bid_id] = ""
         self.bid_adjudication_rationale[current_bid_id] = ""
+        self.bid_adjudication_attempts[current_bid_id] = u256(0)
 
         self.has_bidder_committed[replay_key] = True
         self.bid_counter = current_bid_id + u256(1)
@@ -416,11 +420,10 @@ class EligibleBid(gl.Contract):
             if ev["status"] != "OK":
                 return {
                     "status": "FETCH_FAILED",
-                    "decision": "INELIGIBLE",
                     "doc_len": 0,
                     "actual_hash": "",
                     "verbatim_quote": "NONE",
-                    "rationale": f"Deterministic rejection: Proposal URL fetch failed ({ev['error'][:100]}).",
+                    "rationale": f"Proposal URL could not be retrieved: {ev['error'][:100]}",
                     "fetched_text": ""
                 }
 
@@ -487,11 +490,8 @@ class EligibleBid(gl.Contract):
             # Validator independently fetches proposal from target URL
             ev = _fetch_proposal(target_url)
             if ev["status"] != "OK":
-                # Both leader and validator failed to fetch the URL: consensus on INELIGIBLE
-                return (
-                    str(leader.get("status", "")) == "FETCH_FAILED" and
-                    str(leader.get("decision", "")) == "INELIGIBLE"
-                )
+                # Both leader and validator failed to fetch the URL: consensus on FETCH_FAILED
+                return str(leader.get("status", "")) == "FETCH_FAILED"
 
             # If validator succeeded in fetching, but leader reported FETCH_FAILED:
             # Transient network difference between nodes: reject consensus to revert and allow retry
@@ -533,41 +533,60 @@ class EligibleBid(gl.Contract):
         # preserving the bid as retryable in PENDING rather than permanently disqualifying an honest bidder.
         result = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
 
-        # Deterministic Post-Consensus Enforcements (Zero-trust on LLM fields)
+        # Bounded Retry / Recovery Policy for Fetch Failures:
         status = str(result.get("status", "")).strip().upper()
         if status == "FETCH_FAILED":
+            failures = int(self.bid_adjudication_attempts[bid]) + 1
+            self.bid_adjudication_attempts[bid] = u256(failures)
+            err_reason = str(result.get("rationale", "Proposal URL unreachable.")).strip()[:150]
+
+            if failures < MAX_FETCH_RETRIES:
+                # Keep bid PENDING while retries remain; do not prematurely disqualify
+                self.bid_eligibility_status[bid] = "PENDING"
+                rationale = (
+                    f"Verification pending: Proposal fetch attempt {failures}/{MAX_FETCH_RETRIES} failed ({err_reason}). "
+                    f"Bid remains PENDING for retry."
+                )
+                self.bid_adjudication_rationale[bid] = rationale
+                return f"FETCH_FAILED_RETRYABLE: Attempt {failures}/{MAX_FETCH_RETRIES}"
+            else:
+                # Exhausted retry limit: Mark as FAILED_TO_VERIFY (distinct from INELIGIBLE technical rejection)
+                self.bid_eligibility_status[bid] = "FAILED_TO_VERIFY"
+                rationale = (
+                    f"Adjudication aborted: Proposal URL remained unavailable after {failures} attempts ({err_reason}). "
+                    f"Classified as FAILED_TO_VERIFY."
+                )
+                self.bid_adjudication_rationale[bid] = rationale
+                return "FAILED_TO_VERIFY"
+
+        # Successful fetch: Adjudication succeeded, record attempt count
+        self.bid_adjudication_attempts[bid] = u256(int(self.bid_adjudication_attempts[bid]) + 1)
+
+        decision = str(result.get("decision", "INELIGIBLE")).strip().upper()
+        if decision not in ["ELIGIBLE", "INELIGIBLE"]:
             decision = "INELIGIBLE"
-            doc_len = 0
-            actual_hash = ""
-            quote = "NONE"
-            rationale = str(result.get("rationale", "Deterministic rejection: Proposal URL fetch failed.")).strip()[:200]
-            fetched_text = ""
-        else:
-            decision = str(result.get("decision", "INELIGIBLE")).strip().upper()
-            if decision not in ["ELIGIBLE", "INELIGIBLE"]:
+
+        doc_len = int(result.get("doc_len", 0))
+        actual_hash = str(result.get("actual_hash", "")).lower()
+        quote = str(result.get("verbatim_quote", "NONE")).strip()[:MAX_QUOTE_CHARS]
+        rationale = str(result.get("rationale", "Audited specifications.")).strip()[:200]
+        fetched_text = str(result.get("fetched_text", ""))
+
+        # 1. Deterministic proposal length verification: Reject over-limit content
+        if doc_len > MAX_PROPOSAL_CHARS:
+            decision = "INELIGIBLE"
+            rationale = f"Deterministic clamp: Document length ({doc_len} chars) exceeds bounded limit ({MAX_PROPOSAL_CHARS} chars)."
+
+        # 2. Deterministic cryptographic content hash verification
+        if actual_hash != committed_content_hash:
+            decision = "INELIGIBLE"
+            rationale = f"Deterministic clamp: Actual fetched content hash ({actual_hash[:16]}...) does not match committed hash ({committed_content_hash[:16]}...)."
+
+        # 3. Deterministic verbatim quote verification
+        if decision == "ELIGIBLE":
+            if len(quote) < MIN_QUOTE_CHARS or quote not in fetched_text:
                 decision = "INELIGIBLE"
-
-            doc_len = int(result.get("doc_len", 0))
-            actual_hash = str(result.get("actual_hash", "")).lower()
-            quote = str(result.get("verbatim_quote", "NONE")).strip()[:MAX_QUOTE_CHARS]
-            rationale = str(result.get("rationale", "Audited specifications.")).strip()[:200]
-            fetched_text = str(result.get("fetched_text", ""))
-
-            # 1. Deterministic proposal length verification: Reject over-limit content
-            if doc_len > MAX_PROPOSAL_CHARS:
-                decision = "INELIGIBLE"
-                rationale = f"Deterministic clamp: Document length ({doc_len} chars) exceeds bounded limit ({MAX_PROPOSAL_CHARS} chars)."
-
-            # 2. Deterministic cryptographic content hash verification
-            if actual_hash != committed_content_hash:
-                decision = "INELIGIBLE"
-                rationale = f"Deterministic clamp: Actual fetched content hash ({actual_hash[:16]}...) does not match committed hash ({committed_content_hash[:16]}...)."
-
-            # 3. Deterministic verbatim quote verification
-            if decision == "ELIGIBLE":
-                if len(quote) < MIN_QUOTE_CHARS or quote not in fetched_text:
-                    decision = "INELIGIBLE"
-                    rationale = "Deterministic clamp: Claimed verbatim quote does not exist in fetched proposal body."
+                rationale = "Deterministic clamp: Claimed verbatim quote does not exist in fetched proposal body."
 
         # Commit finalized decision to contract storage
         self.bid_eligibility_status[bid] = decision
